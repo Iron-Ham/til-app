@@ -13,6 +13,9 @@ struct AcronymsController: RouteCollection {
     acronymRoutes.get("first", use: getFirstHandler)
     acronymRoutes.get("sorted", use: sortedHandler)
     acronymRoutes.get(Acronym.parameter, "user", use: getUserHandler)
+    acronymRoutes.post(Acronym.parameter, "categories", Category.parameter, use: addCategoriesHandler)
+    acronymRoutes.get(Acronym.parameter, "categories", use: getCategoriesHandler)
+    acronymRoutes.delete(Acronym.parameter, "categories", Category.parameter, use: removeCategoriesHandler)
   }
 
   func getAllHandler(_ req: Request) throws -> Future<[Acronym]> {
@@ -28,7 +31,10 @@ struct AcronymsController: RouteCollection {
   }
 
   func updateHandler(_ req: Request) throws -> Future<Acronym> {
-    return try flatMap(to: Acronym.self, req.parameters.next(Acronym.self), req.content.decode(Acronym.self)) { acronym, updatedAcronym in
+    return try flatMap(
+    to: Acronym.self,
+    req.parameters.next(Acronym.self),
+    req.content.decode(Acronym.self)) { acronym, updatedAcronym in
       acronym.short = updatedAcronym.short
       acronym.long = updatedAcronym.long
       acronym.userID = updatedAcronym.userID
@@ -71,5 +77,34 @@ struct AcronymsController: RouteCollection {
     return try req
       .parameters.next(Acronym.self)
       .flatMap(to: User.self) { $0.user.get(on: req) }
+  }
+
+  func addCategoriesHandler(_ req: Request) throws -> Future<HTTPStatus> {
+    return try flatMap(
+    to: HTTPStatus.self,
+    req.parameters.next(Acronym.self),
+    req.parameters.next(Category.self)) { acronym, category in
+      return acronym.categories
+        .attach(category, on: req)
+        .transform(to: .created)
+    }
+  }
+
+  func getCategoriesHandler(_ req: Request) throws -> Future<[Category]> {
+    return try req.parameters.next(Acronym.self)
+      .flatMap(to: [Category].self) { acronym in
+        try acronym.categories.query(on: req).all()
+    }
+  }
+
+  func removeCategoriesHandler(_ req: Request) throws -> Future<HTTPStatus> {
+    return try flatMap(
+      to: HTTPStatus.self,
+      req.parameters.next(Acronym.self),
+      req.parameters.next(Category.self)) { acronym, category in
+        return acronym.categories
+          .detach(category, on: req)
+          .transform(to: .noContent)
+    }
   }
 }
